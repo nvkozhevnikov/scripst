@@ -9,19 +9,20 @@ import mysql_queries
 def last_month_calculation():
     current_year = date.today().strftime('%Y')
     today = date.today().strftime('%Y-%m-%d')
-    return today, current_year
+    dates = [today, current_year]
+    return dates
 
 
-def working_time_statistics(db):
+def working_time_statistics(db, dates):
     query_part = "SELECT emp.surname, ROUND((sum(late_time_day)/3600),2), ROUND((sum(early_end_time_day)/3600),2) " \
             "FROM noykana_payment_stb.crocotime_stb as crm " \
             "INNER JOIN noykana_payment_stb.employees_stb as emp ON emp.id = crm.id_employee " \
-            "WHERE date BETWEEN '2021-01-01' AND '2021-04-30' " \
-            "AND crm.id_employee IN (1,2,3) group by surname;"
-    query_full = "Select emp.surname, count(summary_time_day) from noykana_payment_stb.crocotime_stb as crm " \
+            f"WHERE date BETWEEN '{dates[1]}-01-01' AND '{dates[0]}' " \
+            f"AND crm.id_employee IN ({config.MANAGERS_ID_CROCOTIME}) GROUP BY surname;"
+    query_full = "SELECT emp.surname, count(summary_time_day) FROM noykana_payment_stb.crocotime_stb as crm " \
                  "INNER JOIN noykana_payment_stb.employees_stb as emp ON emp.id = crm.id_employee " \
-                 "where date BETWEEN '2021-01-01' AND '2021-04-30' AND crm.id_employee IN (1,2,3) " \
-                 "AND summary_time_day = 0 group by surname"
+                 f"WHERE date BETWEEN '{dates[1]}-01-01' AND '{dates[0]}' AND crm.id_employee " \
+                 f"IN ({config.MANAGERS_ID_CROCOTIME}) AND summary_time_day = 0 GROUP BY surname"
     request_part = db.mysql_query(query_part)
     request_full = db.mysql_query(query_full)
 
@@ -64,7 +65,6 @@ def prepare_report(data):
     header = f'<b>Статистика нерабочего времени с начала {current_year} года</b>\n\n'
     first_element = header + all_message.pop(0)
     all_message.insert(0, first_element)
-    print(all_message)
     return all_message
 
 
@@ -77,11 +77,11 @@ def send_message_to_telegram(message_report):
     }
     url = f'https://api.telegram.org/bot{config.TOKEN_TELEGRAM_BOT}/sendMessage'
     requests.post(url, data=payload)
-    # print(message_report)
 
 
 if __name__ == '__main__':
     db_stb = mysql_queries.MySQLQueries(**config.DB_STB_PARAMS)
-    data = working_time_statistics(db_stb)
+    dates = last_month_calculation()
+    data = working_time_statistics(db_stb, dates)
     all_message = prepare_report(data)
     send_message_to_telegram(all_message)
